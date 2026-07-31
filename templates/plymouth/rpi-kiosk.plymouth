@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Alu-Technika RPI KIOSK
+Description=Alu-Technika kioszk indítóképernyő
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/rpi-kiosk
+ScriptFile=/usr/share/plymouth/themes/rpi-kiosk/rpi-kiosk.script

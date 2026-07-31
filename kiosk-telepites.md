@@ -1,6 +1,6 @@
-### 🖥️ Kiosk Mód Telepítése
+# KIOSK mód telepítése
 
-Használd az alábbi parancsot a Kiosk mód automatikus telepítéséhez. A szkript egy ideiglenes könyvtárban dolgozik, így nem hagy szemetet a rendszerben:
+Normál felhasználóként futtasd az alábbi parancsot. A telepítő csak a szükséges műveleteknél kér `sudo` jogosultságot.
 
 ```bash
 tmpdir="$(mktemp -d)" && (
@@ -15,3 +15,7 @@ tmpdir="$(mktemp -d)" && (
   ./kiosk_setup.sh
 )
 ```
+
+A források a futás végén automatikusan törlődnek. Módosítás vagy új modul beállítása esetén ugyanaz a parancs újra futtatható: a telepítő felülírja a saját fájljait, és lecseréli a korábban megjelölt konfigurációs blokkokat.
+
+Az alapértelmezett célrendszer Raspberry Pi 4, Debian 13/Trixie Desktop, labwc/Wayland és 1920×1080-as HDMI-monitor.

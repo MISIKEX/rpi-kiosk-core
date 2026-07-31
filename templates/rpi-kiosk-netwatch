@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly CONFIG_FILE="/etc/rpi-kiosk/netwatch.env"
+[[ -r "$CONFIG_FILE" ]] || {
+  echo "Hiányzó konfiguráció: $CONFIG_FILE" >&2
+  exit 1
+}
+# shellcheck disable=SC1090
+source "$CONFIG_FILE"
+
+[[ "${CHECK_INTERVAL_SECONDS:-}" =~ ^[1-9][0-9]*$ ]] ||
+  { echo "Hibás CHECK_INTERVAL_SECONDS." >&2; exit 2; }
+[[ "${REBOOT_AFTER_MINUTES:-}" =~ ^[1-9][0-9]*$ ]] ||
+  { echo "Hibás REBOOT_AFTER_MINUTES." >&2; exit 2; }
+
+readonly LOG_TAG="rpi-kiosk-netwatch"
+readonly REBOOT_AFTER_SECONDS=$((REBOOT_AFTER_MINUTES * 60))
+
+log_message() {
+  logger -t "$LOG_TAG" -- "$1"
+}
+
+network_available() {
+  local target
+  # A szóközzel elválasztott, root által kezelt célpontlista szándékosan bomlik szavakra.
+  # shellcheck disable=SC2086
+  for target in $PING_TARGETS; do
+    if ping -c 1 -W 2 "$target" >/dev/null 2>&1; then
+      return 0
+    fi
+  done
+
+  if command -v curl >/dev/null 2>&1 &&
+    curl -fsSL --max-time 8 -o /dev/null "$HTTP_CHECK_URL"; then
+    return 0
+  fi
+  return 1
+}
+
+failure_since=0
+log_message "Elindult: ellenőrzés ${CHECK_INTERVAL_SECONDS} másodpercenként, reboot ${REBOOT_AFTER_MINUTES} perc után."
+
+while true; do
+  if network_available; then
+    if ((failure_since > 0)); then
+      log_message "Az internetkapcsolat helyreállt."
+      failure_since=0
+    fi
+  else
+    now="$(date +%s)"
+    if ((failure_since == 0)); then
+      failure_since="$now"
+      log_message "Az internetkapcsolat megszakadt; visszaszámlálás elindult."
+    elif ((now - failure_since >= REBOOT_AFTER_SECONDS)); then
+      log_message "Tartós internetkimaradás; a rendszer újraindul."
+      /usr/bin/systemctl reboot
+      exit 0
+    fi
+  fi
+  sleep "$CHECK_INTERVAL_SECONDS"
+done

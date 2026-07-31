@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+cec_device=""
+for candidate in /dev/cec*; do
+  if [[ -e "$candidate" ]]; then
+    cec_device="$candidate"
+    break
+  fi
+done
+[[ -n "$cec_device" ]] || {
+  echo "Nem található CEC eszköz." >&2
+  exit 1
+}
+
+rc_device="$(ir-keytable -l 2>/dev/null | grep -oE 'rc[0-9]+' | head -n 1 || true)"
+rc_device="${rc_device:-rc0}"
+
+/usr/bin/cec-ctl -d "$cec_device" --playback
+/usr/bin/ir-keytable -c -s "$rc_device" -w /etc/rc_keymaps/rpi-kiosk-cec.toml
