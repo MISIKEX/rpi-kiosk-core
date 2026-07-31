@@ -11,7 +11,7 @@ tmpdir="$(mktemp -d)" && (
   git clone --depth 1 https://github.com/MISIKEX/rpi-kiosk-core.git "$tmpdir"
   cd "$tmpdir"
 
-  chmod +x kiosk_idle_netwatch_setup.sh
+  chmod +x kiosk_setup.sh
   ./kiosk_idle_netwatch_setup.sh
 )
 ```
