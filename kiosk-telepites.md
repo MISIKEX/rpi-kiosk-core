@@ -12,6 +12,6 @@ tmpdir="$(mktemp -d)" && (
   cd "$tmpdir"
 
   chmod +x kiosk_setup.sh
-  ./kiosk_idle_netwatch_setup.sh
+  ./kiosk_setup.sh
 )
 ```
