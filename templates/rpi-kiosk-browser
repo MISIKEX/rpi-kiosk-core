@@ -137,7 +137,9 @@ launch_browser() {
   [[ "$INCOGNITO_MODE" == "y" ]] && flags+=(--incognito)
 
   : >"$log"
-  nohup setsid "$CHROMIUM_BIN" "${flags[@]}" "$url" >>"$log" 2>&1 &
+  # A Chromium nem örökölheti a vezérlő zárolását: különben a következő
+  # work/idle váltás a böngésző teljes élettartama alatt blokkolva marad.
+  nohup setsid "$CHROMIUM_BIN" "${flags[@]}" "$url" >>"$log" 2>&1 9>&- &
   browser_pid=$!
   printf '%s\n' "$browser_pid" >"$pid_path"
 
