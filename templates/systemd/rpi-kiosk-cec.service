@@ -1,0 +1,12 @@
+[Unit]
+Description=Alu-Technika RPI KIOSK HDMI-CEC setup
+After=systemd-udev-settle.service
+ConditionPathExistsGlob=/dev/cec*
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/rpi-kiosk-cec
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

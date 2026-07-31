@@ -1,0 +1,29 @@
+name: Installer validation
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Run ShellCheck
+        run: |
+          shellcheck -x \
+            kiosk_setup.sh \
+            templates/rpi-kiosk-browser \
+            templates/rpi-kiosk-netwatch \
+            templates/cec/rpi-kiosk-cec \
+            tests/test.sh
+
+      - name: Run installer tests
+        run: bash tests/test.sh

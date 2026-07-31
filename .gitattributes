@@ -1,0 +1,9 @@
+*.sh text eol=lf
+templates/rpi-kiosk-* text eol=lf
+templates/cec/rpi-kiosk-cec text eol=lf
+*.service text eol=lf
+*.toml text eol=lf
+*.plymouth text eol=lf
+*.script text eol=lf
+*.md text eol=lf
+*.png binary
