@@ -11,6 +11,11 @@ import urllib.request
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 9222
 HTTP_TIMEOUT = 3
 WS_TIMEOUT = 5
+MAX_FRAME_SIZE = 2 * 1024 * 1024
+LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+if not 1 <= PORT <= 65535:
+    raise SystemExit("A Chromium DevTools portnak 1 és 65535 közé kell esnie.")
 
 
 def recv_exact(sock, size):
@@ -49,6 +54,8 @@ def recv_frame(sock):
         length = struct.unpack("!H", recv_exact(sock, 2))[0]
     elif length == 127:
         length = struct.unpack("!Q", recv_exact(sock, 8))[0]
+    if length > MAX_FRAME_SIZE:
+        raise RuntimeError("Túl nagy DevTools WebSocket frame")
     masked = bool(second & 0x80)
     mask = recv_exact(sock, 4) if masked else b""
     payload = recv_exact(sock, length)
@@ -59,8 +66,14 @@ def recv_frame(sock):
 
 def websocket_runtime_check(ws_url):
     parsed = urllib.parse.urlparse(ws_url)
+    if parsed.scheme != "ws":
+        raise RuntimeError("Nem támogatott DevTools WebSocket séma")
     host = parsed.hostname or "127.0.0.1"
+    if host not in LOOPBACK_HOSTS:
+        raise RuntimeError("A DevTools WebSocket nem loopback címre mutat")
     port = parsed.port or 80
+    if not 1 <= port <= 65535:
+        raise RuntimeError("Érvénytelen DevTools WebSocket port")
     path = parsed.path or "/"
     if parsed.query:
         path += "?" + parsed.query
