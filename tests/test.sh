@@ -28,14 +28,41 @@ from pathlib import Path
 compile(Path("templates/rpi-kiosk-chromium-health.py").read_text(), "templates/rpi-kiosk-chromium-health.py", "exec")
 PY
 
+if python3 templates/rpi-kiosk-chromium-health.py 70000 >/dev/null 2>&1; then
+  echo "HIBA: a Chromium health-check elfogadott egy érvénytelen TCP-portot." >&2
+  exit 1
+fi
+
 grep -Fq 'Storage=persistent' templates/journald/90-rpi-kiosk-persistent.conf
 grep -Fq 'SystemMaxUse=64M' templates/journald/90-rpi-kiosk-persistent.conf
 grep -Fq -- '--remote-debugging-address=127.0.0.1' templates/rpi-kiosk-browser
 grep -Fq 'force-restart' templates/rpi-kiosk-browser
 grep -Fq 'renderer_healthy' templates/rpi-kiosk-netwatch
+grep -Fq 'Restart=on-failure' templates/systemd/rpi-kiosk-netwatch.service
+grep -Fq 'https://github.com/MISIKEX/rpi-kiosk-core.git' README.md
+grep -Fq 'https://github.com/MISIKEX/rpi-kiosk-core.git' kiosk-telepites.md
+
+# A törölt előd-repositoryk neve/URL-je ne kerülhessen vissza az aktív forrásba.
+obsolete_refs=(
+  "MISIKEX/rpi-kiosk-idle""-netwatch"
+  "https://github.com/MISIKEX/rpi-kiosk-idle"".git"
+  "https://github.com/MISIKEX/rpi-kiosk"".git"
+)
+for obsolete_ref in "${obsolete_refs[@]}"; do
+  if grep -RInF --exclude-dir=.git -- "$obsolete_ref" .; then
+    echo "HIBA: törölt KIOSK repositoryra mutató hivatkozás maradt: $obsolete_ref" >&2
+    exit 1
+  fi
+done
+[[ ! -e .gitmodules ]] || {
+  echo "HIBA: a KIOSK core nem használhat Git submodule-t külső KIOSK forrásként." >&2
+  exit 1
+}
 
 # shellcheck source=lib/core.sh
 source "$TEST_ROOT/lib/core.sh"
+# shellcheck source=modules/packages.sh
+source "$TEST_ROOT/modules/packages.sh"
 # shellcheck source=modules/hardware.sh
 source "$TEST_ROOT/modules/hardware.sh"
 # shellcheck source=modules/appearance.sh
@@ -79,6 +106,25 @@ if validate_http_url "javascript:alert(1)"; then
   echo "HIBA: veszélyes URL átment a validáción." >&2
   exit 1
 fi
+
+# A renderer-watchdog Python függősége akkor is kerüljön a csomaglistába,
+# ha a kurzorelrejtés ki van kapcsolva.
+package_available() { return 0; }
+ENABLE_WAYLAND="n"
+ENABLE_CHROMIUM="n"
+ENABLE_BROWSER="y"
+ENABLE_IDLE="n"
+ENABLE_WALLPAPER="n"
+ENABLE_CURSOR_HIDE="n"
+ENABLE_SPLASH="n"
+ENABLE_CEC="n"
+ENABLE_NETWATCH="y"
+ENABLE_NET_WAIT="n"
+ENABLE_GREETD="n"
+build_package_list
+printf '%s\n' "${INSTALL_PACKAGES[@]}" | grep -qx 'python3'
+printf '%s\n' "${INSTALL_PACKAGES[@]}" | grep -qx 'chromium'
+printf '%s\n' "${INSTALL_PACKAGES[@]}" | grep -qx 'curl'
 
 managed_file="$RUN_TMP/autostart"
 cat >"$managed_file" <<'EOF'
@@ -214,6 +260,42 @@ fi
 bash "$TEST_ROOT/templates/rpi-kiosk-browser" stop
 if kill -0 "$restarted_work_pid" 2>/dev/null; then
   echo "HIBA: a work Chromium-folyamat stop után is fut." >&2
+  exit 1
+fi
+
+cp "$RPI_KIOSK_CONFIG_FILE" "$RUN_TMP/browser-good.env"
+sed -i 's/WORK_DEBUG_PORT=9222/WORK_DEBUG_PORT=70000/' "$RPI_KIOSK_CONFIG_FILE"
+if bash "$TEST_ROOT/templates/rpi-kiosk-browser" work >/dev/null 2>&1; then
+  echo "HIBA: a böngészővezérlő elfogadott egy 65535 feletti debug portot." >&2
+  exit 1
+fi
+cp "$RUN_TMP/browser-good.env" "$RPI_KIOSK_CONFIG_FILE"
+sed -i 's/IDLE_DEBUG_PORT=9223/IDLE_DEBUG_PORT=9222/' "$RPI_KIOSK_CONFIG_FILE"
+if bash "$TEST_ROOT/templates/rpi-kiosk-browser" work >/dev/null 2>&1; then
+  echo "HIBA: a böngészővezérlő elfogadott két azonos debug portot." >&2
+  exit 1
+fi
+cp "$RUN_TMP/browser-good.env" "$RPI_KIOSK_CONFIG_FILE"
+
+netwatch_config="$RUN_TMP/netwatch.env"
+cat >"$netwatch_config" <<EOF
+CHECK_INTERVAL_SECONDS=30
+REBOOT_AFTER_MINUTES=20
+PING_TARGETS='1.1.1.1 8.8.8.8'
+HTTP_CHECK_URL=https://connectivitycheck.gstatic.com/generate_204
+BROWSER_USER=$(id -un)
+BROWSER_WATCHDOG_ENABLED=n
+BROWSER_FAIL_CHECKS=3
+BROWSER_RESTART_FAILURE_LIMIT=3
+BROWSER_RESTART_SETTLE_SECONDS=12
+WORK_URL=http://127.0.0.1/work
+IDLE_URL=http://127.0.0.1/idle
+WORK_DEBUG_PORT=9222
+IDLE_DEBUG_PORT=9222
+EOF
+if RPI_KIOSK_NETWATCH_CONFIG_FILE="$netwatch_config" \
+  bash "$TEST_ROOT/templates/rpi-kiosk-netwatch" >/dev/null 2>&1; then
+  echo "HIBA: a watchdog elfogadott két azonos debug portot." >&2
   exit 1
 fi
 
