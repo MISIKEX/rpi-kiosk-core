@@ -21,7 +21,10 @@ build_package_list() {
     requested+=(swaybg)
   fi
   if is_yes "$ENABLE_CURSOR_HIDE"; then
-    requested+=(wtype python3)
+    requested+=(wtype)
+  fi
+  if is_yes "$ENABLE_CURSOR_HIDE" || { is_yes "$ENABLE_NETWATCH" && is_yes "$ENABLE_BROWSER"; }; then
+    requested+=(python3)
   fi
   if is_yes "$ENABLE_SPLASH"; then
     requested+=(plymouth plymouth-themes initramfs-tools)
