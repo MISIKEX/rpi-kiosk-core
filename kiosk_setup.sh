@@ -62,7 +62,7 @@ collect_configuration() {
 
   ENABLE_CURSOR_HIDE="$(ask_yes_no "Rejtsük el automatikusan az egérkurzort induláskor?" "y")"
   ENABLE_WALLPAPER="$(ask_yes_no "Telepítsük az előre definiált Alu-Technika hátteret?" "y")"
-  ENABLE_SPLASH="$(ask_yes_no "Telepítsük az előre definiált Plymouth splash képet?" "y")"
+  ENABLE_SPLASH="$(ask_yes_no "Telepítsük a saját, csomagfrissítéstől független Plymouth splash témát?" "y")"
 
   FORCE_RESOLUTION="$(ask_yes_no "Kényszerítsük a kijelzőt 1920x1080@60 módra?" "y")"
   if is_yes "$FORCE_RESOLUTION"; then
@@ -80,9 +80,9 @@ collect_configuration() {
   ENABLE_HDMI_AUDIO="$(ask_yes_no "Tiltsuk le az analóg hangot, hogy a HDMI legyen az elsődleges?" "y")"
   ENABLE_CEC="$(ask_yes_no "Engedélyezzük a HDMI-CEC távirányító támogatást?" "n")"
 
-  ENABLE_NETWATCH="$(ask_yes_no "Engedélyezzük az internet-watchdog szolgáltatást?" "y")"
+  ENABLE_NETWATCH="$(ask_yes_no "Engedélyezzük az internet + Chromium renderer KIOSK watchdogot és a korlátozott persistent hibajournalt?" "y")"
   if is_yes "$ENABLE_NETWATCH"; then
-    NETWATCH_REBOOT_MINUTES="$(ask_positive_integer "Hány perc folyamatos internetkimaradás után induljon újra?" "20")"
+    NETWATCH_REBOOT_MINUTES="$(ask_positive_integer "Hány perc folyamatos teljes internetkimaradás után induljon újra?" "20")"
   fi
 }
 
@@ -103,11 +103,11 @@ show_plan() {
   fi
   print_choice "Kurzor automatikus elrejtése" "$ENABLE_CURSOR_HIDE"
   print_choice "Alu-Technika háttér" "$ENABLE_WALLPAPER"
-  print_choice "Plymouth splash" "$ENABLE_SPLASH"
+  print_choice "Saját Plymouth splash téma" "$ENABLE_SPLASH"
   print_choice "1080p kijelzőmód" "$FORCE_RESOLUTION"
   print_choice "HDMI-hang elsődlegessé tétele" "$ENABLE_HDMI_AUDIO"
   print_choice "HDMI-CEC" "$ENABLE_CEC"
-  print_choice "Internet-watchdog" "$ENABLE_NETWATCH"
+  print_choice "Internet + Chromium KIOSK watchdog" "$ENABLE_NETWATCH"
 }
 
 apply_configuration() {
