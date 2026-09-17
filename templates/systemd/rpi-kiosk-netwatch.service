@@ -1,16 +1,12 @@
 [Unit]
-Description=Alu-Technika RPI KIOSK internet watchdog
+Description=Alu-Technika RPI KIOSK internet + Chromium watchdog
 After=network.target
 
 [Service]
 Type=simple
 ExecStart=/usr/local/bin/rpi-kiosk-netwatch
-Restart=on-failure
+Restart=always
 RestartSec=5
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectHome=true
-ProtectSystem=strict
 
 [Install]
 WantedBy=multi-user.target
