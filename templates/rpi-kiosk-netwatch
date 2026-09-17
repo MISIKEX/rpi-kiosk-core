@@ -9,13 +9,18 @@ readonly CONFIG_FILE="/etc/rpi-kiosk/netwatch.env"
 # shellcheck disable=SC1090
 source "$CONFIG_FILE"
 
-[[ "${CHECK_INTERVAL_SECONDS:-}" =~ ^[1-9][0-9]*$ ]] ||
-  { echo "Hibás CHECK_INTERVAL_SECONDS." >&2; exit 2; }
-[[ "${REBOOT_AFTER_MINUTES:-}" =~ ^[1-9][0-9]*$ ]] ||
-  { echo "Hibás REBOOT_AFTER_MINUTES." >&2; exit 2; }
+for value_name in CHECK_INTERVAL_SECONDS REBOOT_AFTER_MINUTES BROWSER_FAIL_CHECKS BROWSER_RESTART_FAILURE_LIMIT BROWSER_RESTART_SETTLE_SECONDS WORK_DEBUG_PORT IDLE_DEBUG_PORT; do
+  value="${!value_name:-}"
+  [[ "$value" =~ ^[1-9][0-9]*$ ]] || {
+    echo "Hibás $value_name érték." >&2
+    exit 2
+  }
+done
 
 readonly LOG_TAG="rpi-kiosk-netwatch"
 readonly REBOOT_AFTER_SECONDS=$((REBOOT_AFTER_MINUTES * 60))
+readonly BROWSER_BIN="/usr/local/bin/rpi-kiosk-browser"
+readonly BROWSER_HEALTH="/usr/local/libexec/rpi-kiosk-chromium-health"
 
 log_message() {
   logger -t "$LOG_TAG" -- "$1"
@@ -23,14 +28,12 @@ log_message() {
 
 network_available() {
   local target
-  # A szóközzel elválasztott, root által kezelt célpontlista szándékosan bomlik szavakra.
   # shellcheck disable=SC2086
   for target in $PING_TARGETS; do
     if ping -c 1 -W 2 "$target" >/dev/null 2>&1; then
       return 0
     fi
   done
-
   if command -v curl >/dev/null 2>&1 &&
     curl -fsSL --max-time 8 -o /dev/null "$HTTP_CHECK_URL"; then
     return 0
@@ -38,8 +41,97 @@ network_available() {
   return 1
 }
 
+browser_uid() {
+  id -u "$BROWSER_USER" 2>/dev/null
+}
+
+browser_home() {
+  getent passwd "$BROWSER_USER" | cut -d: -f6
+}
+
+graphical_session_ready() {
+  local uid
+  uid="$(browser_uid)" || return 1
+  [[ -S "/run/user/$uid/wayland-0" ]]
+}
+
+state_file() {
+  local uid
+  uid="$(browser_uid)" || return 1
+  printf '/run/user/%s/rpi-kiosk/browser-state\n' "$uid"
+}
+
+current_mode() {
+  local file state mode="work"
+  file="$(state_file)" || { printf 'work\n'; return; }
+  if [[ -r "$file" ]]; then
+    state="$(<"$file")"
+    mode="${state%%:*}"
+  fi
+  case "$mode" in
+    work|idle) printf '%s\n' "$mode" ;;
+    *) printf 'work\n' ;;
+  esac
+}
+
+current_debug_port() {
+  case "$(current_mode)" in
+    idle) printf '%s\n' "$IDLE_DEBUG_PORT" ;;
+    *) printf '%s\n' "$WORK_DEBUG_PORT" ;;
+  esac
+}
+
+current_target_url() {
+  case "$(current_mode)" in
+    idle) printf '%s\n' "$IDLE_URL" ;;
+    *) printf '%s\n' "$WORK_URL" ;;
+  esac
+}
+
+site_available() {
+  local url
+  url="$(current_target_url)"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL --max-time 10 -o /dev/null "$url" >/dev/null 2>&1
+  else
+    return 0
+  fi
+}
+
+renderer_healthy() {
+  local uid port
+  uid="$(browser_uid)" || return 1
+  port="$(current_debug_port)"
+  pgrep -u "$uid" -f 'chromium.*--kiosk' >/dev/null 2>&1 || return 1
+  "$BROWSER_HEALTH" "$port" >/dev/null 2>&1
+}
+
+restart_browser() {
+  local uid home
+  uid="$(browser_uid)" || return 1
+  home="$(browser_home)"
+  [[ -n "$home" ]] || return 1
+  log_message "Chromium helyreállítás indul ($(current_mode) mód)."
+
+  /usr/sbin/runuser -u "$BROWSER_USER" -- /usr/bin/env \
+    HOME="$home" \
+    XDG_RUNTIME_DIR="/run/user/$uid" \
+    XDG_STATE_HOME="$home/.local/state" \
+    WAYLAND_DISPLAY="wayland-0" \
+    DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+    "$BROWSER_BIN" force-restart >/dev/null 2>&1 || return 1
+
+  sleep "$BROWSER_RESTART_SETTLE_SECONDS"
+  renderer_healthy
+}
+
 failure_since=0
-log_message "Elindult: ellenőrzés ${CHECK_INTERVAL_SECONDS} másodpercenként, reboot ${REBOOT_AFTER_MINUTES} perc után."
+browser_fail_count=0
+browser_restart_failures=0
+site_was_down=0
+last_mode=""
+
+log_message "Elindult: internet-watchdog + Chromium renderer watchdog aktív."
 
 while true; do
   if network_available; then
@@ -58,5 +150,54 @@ while true; do
       exit 0
     fi
   fi
+
+  if [[ "$BROWSER_WATCHDOG_ENABLED" == "y" ]] && graphical_session_ready; then
+    mode="$(current_mode)"
+    if [[ "$mode" != "$last_mode" ]]; then
+      site_was_down=0
+      browser_fail_count=0
+      last_mode="$mode"
+    fi
+
+    if renderer_healthy; then
+      browser_fail_count=0
+      browser_restart_failures=0
+    else
+      browser_fail_count=$((browser_fail_count + 1))
+      if ((browser_fail_count == 1)); then
+        log_message "Chromium renderer nem válaszol; ellenőrzési sorozat elindult."
+      fi
+      if ((browser_fail_count >= BROWSER_FAIL_CHECKS)); then
+        if restart_browser; then
+          log_message "Chromium sikeresen helyreállt."
+          browser_fail_count=0
+          browser_restart_failures=0
+        else
+          browser_restart_failures=$((browser_restart_failures + 1))
+          browser_fail_count=0
+          log_message "Chromium helyreállítás sikertelen (${browser_restart_failures}/${BROWSER_RESTART_FAILURE_LIMIT})."
+          if ((browser_restart_failures >= BROWSER_RESTART_FAILURE_LIMIT)); then
+            log_message "A Chromium ismételt helyreállítása sikertelen; teljes rendszer-újraindítás."
+            /usr/bin/systemctl reboot
+            exit 0
+          fi
+        fi
+      fi
+    fi
+
+    if site_available; then
+      if ((site_was_down == 1)); then
+        log_message "Az aktuális kioszk URL újra elérhető; Chromium friss helyreállítása."
+        restart_browser >/dev/null 2>&1 || true
+        site_was_down=0
+      fi
+    else
+      if ((site_was_down == 0)); then
+        log_message "Az aktuális kioszk URL nem érhető el: $(current_target_url)"
+        site_was_down=1
+      fi
+    fi
+  fi
+
   sleep "$CHECK_INTERVAL_SECONDS"
 done
