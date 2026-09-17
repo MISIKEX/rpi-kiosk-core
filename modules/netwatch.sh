@@ -31,6 +31,8 @@ cleanup_legacy_netwatch() {
 }
 
 enable_persistent_kiosk_journal() {
+  # A 2026-09-17-i élő javítás korábbi fájlnevének idempotens migrációja.
+  remove_root_file "/etc/systemd/journald.conf.d/90-kiosk-persistent.conf"
   install_root_file \
     "$SCRIPT_DIR/templates/journald/90-rpi-kiosk-persistent.conf" \
     "/etc/systemd/journald.conf.d/90-rpi-kiosk-persistent.conf" \
