@@ -10,6 +10,8 @@ INCOGNITO_MODE=$(shell_quote "$ENABLE_INCOGNITO")
 WAIT_FOR_NETWORK=$(shell_quote "$ENABLE_NET_WAIT")
 PING_HOST=$(shell_quote "$PING_HOST")
 NETWORK_WAIT_SECONDS=$(shell_quote "$NETWORK_WAIT_SECONDS")
+WORK_DEBUG_PORT=9222
+IDLE_DEBUG_PORT=9223
 CHROMIUM_BIN=$(shell_quote "$(command -v chromium || command -v chromium-browser || printf '/usr/bin/chromium')")
 EOF
 }
@@ -48,7 +50,7 @@ apply_browser_module() {
     install_chromium_policy
     rm -f -- "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/rpi-kiosk/browser-state"
     write_state_flag "browser-managed"
-    success "Kioszk böngészővezérlő telepítve."
+    success "Kioszk böngészővezérlő telepítve, localhost renderer health portokkal."
   else
     remove_root_file "$KIOSK_BIN_DIR/rpi-kiosk-browser"
     remove_root_file "$KIOSK_ETC_DIR/browser.env"
