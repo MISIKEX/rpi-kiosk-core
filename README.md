@@ -2,7 +2,7 @@
 
 Gyorsan telepíthető és biztonságosan újrafuttatható kioszkrendszer Raspberry Pi 4 gépekhez.
 
-Ez a repository a kioszkrendszer **egyetlen aktívan karbantartott forrása**. A régi `MISIKEX/rpi-kiosk-idle-netwatch` repository csak kompatibilitási indító, és mindig ennek a projektnek az aktuális `main` ágát futtatja.
+Ez a repository a kioszkrendszer **egyetlen aktívan karbantartott forrása**.
 
 ## Támogatott célrendszer
 
@@ -41,6 +41,8 @@ A normál, aktív nézet a helyi kezelőpanel. A `swayidle` figyeli a felhaszná
 - a két nézet külön böngészőprofilt és külön localhost DevTools portot használ;
 - zárolás és PID-ellenőrzés akadályozza meg a párhuzamos vagy idegen Chromium-folyamatok leállítását;
 - a Raspberry Pi OS saját képernyőblankolása letiltásra kerül, hogy az inaktív KIOSK oldal folyamatosan látható maradjon.
+
+A telepítő a kiválasztott funkciók függőségeit konzisztensen kezeli: Waylandot igénylő KIOSK funkciók esetén a labwc/Wayland modul automatikusan bekapcsol, a renderer-watchdog Python futtatókörnyezete pedig explicit csomagfüggőség.
 
 ### KIOSK watchdog
 
@@ -105,6 +107,6 @@ Sikertelen telepítési lépésnél a hiba részletei a `~/rpi-kiosk-install-err
 bash tests/test.sh
 ```
 
-A teszt ellenőrzi a Bash-szintaxist, a Python health-check szintaxisát, a kezelt blokkok ismételt frissítését, a bootparaméter-kezelést, a work/idle Chromium-váltást, a külön localhost debug portokat és a `force-restart` működését. A GitHub Actions CI minden push után automatikusan futtatja a ShellChecket és a telepítőteszteket.
+A teszt ellenőrzi a Bash-szintaxist, a Python health-check szintaxisát, a konfigurációvalidálást, a kezelt blokkok ismételt frissítését, a bootparaméter-kezelést, a work/idle Chromium-váltást, a külön localhost debug portokat és a `force-restart` működését. A repository-higiénia tesztje megakadályozza a korábbi, törölt KIOSK repók hivatkozásainak visszakerülését. A GitHub Actions CI minden push után automatikusan futtatja ezeket az ellenőrzéseket.
 
 Részletes felépítés: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
