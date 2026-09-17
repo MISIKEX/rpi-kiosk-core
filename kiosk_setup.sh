@@ -84,6 +84,19 @@ collect_configuration() {
   if is_yes "$ENABLE_NETWATCH"; then
     NETWATCH_REBOOT_MINUTES="$(ask_positive_integer "Hány perc folyamatos teljes internetkimaradás után induljon újra?" "20")"
   fi
+
+  # A böngésző, a labwc kurzorkezelés, a swaybg és a wlr-randr mind Waylandot
+  # igényel. Ne engedjünk olyan kombinációt, amely telepítés után biztosan hibás.
+  if ! is_yes "$ENABLE_WAYLAND"; then
+    if is_yes "$ENABLE_BROWSER" || \
+      is_yes "$ENABLE_CURSOR_HIDE" || \
+      is_yes "$ENABLE_WALLPAPER" || \
+      is_yes "$FORCE_RESOLUTION" || \
+      is_yes "$ENABLE_ROTATION"; then
+      warn "A kiválasztott KIOSK funkciók Wayland/labwc környezetet igényelnek; a Wayland modul automatikusan bekapcsolva."
+      ENABLE_WAYLAND="y"
+    fi
+  fi
 }
 
 show_plan() {
