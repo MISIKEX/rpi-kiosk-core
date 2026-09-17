@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-readonly CONFIG_FILE="/etc/rpi-kiosk/netwatch.env"
+readonly CONFIG_FILE="${RPI_KIOSK_NETWATCH_CONFIG_FILE:-/etc/rpi-kiosk/netwatch.env}"
 [[ -r "$CONFIG_FILE" ]] || {
   echo "Hiányzó konfiguráció: $CONFIG_FILE" >&2
   exit 1
@@ -9,13 +9,49 @@ readonly CONFIG_FILE="/etc/rpi-kiosk/netwatch.env"
 # shellcheck disable=SC1090
 source "$CONFIG_FILE"
 
-for value_name in CHECK_INTERVAL_SECONDS REBOOT_AFTER_MINUTES BROWSER_FAIL_CHECKS BROWSER_RESTART_FAILURE_LIMIT BROWSER_RESTART_SETTLE_SECONDS WORK_DEBUG_PORT IDLE_DEBUG_PORT; do
+valid_tcp_port() {
+  local value="$1"
+  [[ "$value" =~ ^[1-9][0-9]*$ ]] || return 1
+  ((10#$value >= 1 && 10#$value <= 65535))
+}
+
+for value_name in CHECK_INTERVAL_SECONDS REBOOT_AFTER_MINUTES BROWSER_FAIL_CHECKS BROWSER_RESTART_FAILURE_LIMIT BROWSER_RESTART_SETTLE_SECONDS; do
   value="${!value_name:-}"
   [[ "$value" =~ ^[1-9][0-9]*$ ]] || {
     echo "Hibás $value_name érték." >&2
     exit 2
   }
 done
+[[ "${BROWSER_WATCHDOG_ENABLED:-}" == "y" || "${BROWSER_WATCHDOG_ENABLED:-}" == "n" ]] || {
+  echo "Hibás BROWSER_WATCHDOG_ENABLED érték; csak y vagy n engedélyezett." >&2
+  exit 2
+}
+[[ -n "${BROWSER_USER:-}" ]] || { echo "Hiányzó BROWSER_USER érték." >&2; exit 2; }
+[[ -n "${PING_TARGETS:-}" ]] || { echo "Hiányzó PING_TARGETS érték." >&2; exit 2; }
+[[ "${HTTP_CHECK_URL:-}" =~ ^https?://[^[:space:]]+$ ]] || {
+  echo "Hibás HTTP_CHECK_URL érték." >&2
+  exit 2
+}
+[[ "${WORK_URL:-}" =~ ^https?://[^[:space:]]+$ ]] || {
+  echo "Hibás WORK_URL érték." >&2
+  exit 2
+}
+[[ "${IDLE_URL:-}" =~ ^https?://[^[:space:]]+$ ]] || {
+  echo "Hibás IDLE_URL érték." >&2
+  exit 2
+}
+valid_tcp_port "${WORK_DEBUG_PORT:-}" || {
+  echo "Hibás WORK_DEBUG_PORT; 1-65535 közötti TCP-port szükséges." >&2
+  exit 2
+}
+valid_tcp_port "${IDLE_DEBUG_PORT:-}" || {
+  echo "Hibás IDLE_DEBUG_PORT; 1-65535 közötti TCP-port szükséges." >&2
+  exit 2
+}
+[[ "$WORK_DEBUG_PORT" != "$IDLE_DEBUG_PORT" ]] || {
+  echo "A WORK_DEBUG_PORT és IDLE_DEBUG_PORT nem lehet azonos." >&2
+  exit 2
+}
 
 readonly LOG_TAG="rpi-kiosk-netwatch"
 readonly REBOOT_AFTER_SECONDS=$((REBOOT_AFTER_MINUTES * 60))
@@ -35,7 +71,7 @@ network_available() {
     fi
   done
   if command -v curl >/dev/null 2>&1 &&
-    curl -fsSL --max-time 8 -o /dev/null "$HTTP_CHECK_URL"; then
+    curl -fsSL --max-time 8 -o /dev/null "$HTTP_CHECK_URL" 2>/dev/null; then
     return 0
   fi
   return 1
@@ -91,11 +127,8 @@ current_target_url() {
 site_available() {
   local url
   url="$(current_target_url)"
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL --max-time 10 -o /dev/null "$url" >/dev/null 2>&1
-  else
-    return 0
-  fi
+  command -v curl >/dev/null 2>&1 || return 1
+  curl -fsSL --max-time 10 -o /dev/null "$url" >/dev/null 2>&1
 }
 
 renderer_healthy() {
