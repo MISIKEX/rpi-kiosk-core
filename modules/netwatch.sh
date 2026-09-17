@@ -31,7 +31,7 @@ cleanup_legacy_netwatch() {
 }
 
 enable_persistent_kiosk_journal() {
-  # A 2026-09-17-i élő javítás korábbi fájlnevének idempotens migrációja.
+  # A korábbi élő javítás fájlnevét automatikusan migráljuk.
   remove_root_file "/etc/systemd/journald.conf.d/90-kiosk-persistent.conf"
   install_root_file \
     "$SCRIPT_DIR/templates/journald/90-rpi-kiosk-persistent.conf" \
@@ -44,10 +44,18 @@ enable_persistent_kiosk_journal() {
 }
 
 disable_persistent_kiosk_journal() {
-  if has_state_flag "persistent-journal-managed"; then
-    remove_root_file "/etc/systemd/journald.conf.d/90-rpi-kiosk-persistent.conf"
+  local changed="n"
+  if sudo test -e "/etc/systemd/journald.conf.d/90-kiosk-persistent.conf" || \
+    sudo test -e "/etc/systemd/journald.conf.d/90-rpi-kiosk-persistent.conf"; then
+    changed="y"
+  fi
+
+  remove_root_file "/etc/systemd/journald.conf.d/90-kiosk-persistent.conf"
+  remove_root_file "/etc/systemd/journald.conf.d/90-rpi-kiosk-persistent.conf"
+  remove_state_flag "persistent-journal-managed"
+
+  if [[ "$changed" == "y" ]]; then
     run_optional_step "systemd-journald újraindítása" sudo systemctl restart systemd-journald.service
-    remove_state_flag "persistent-journal-managed"
   fi
 }
 
@@ -57,10 +65,16 @@ enable_netwatch() {
     "$SCRIPT_DIR/templates/rpi-kiosk-netwatch" \
     "$KIOSK_BIN_DIR/rpi-kiosk-netwatch" \
     0755
-  install_root_file \
-    "$SCRIPT_DIR/templates/rpi-kiosk-chromium-health.py" \
-    "/usr/local/libexec/rpi-kiosk-chromium-health" \
-    0755
+
+  if is_yes "$ENABLE_BROWSER"; then
+    install_root_file \
+      "$SCRIPT_DIR/templates/rpi-kiosk-chromium-health.py" \
+      "/usr/local/libexec/rpi-kiosk-chromium-health" \
+      0755
+  else
+    remove_root_file "/usr/local/libexec/rpi-kiosk-chromium-health"
+  fi
+
   write_root_content \
     "$KIOSK_ETC_DIR/netwatch.env" \
     0644 \
