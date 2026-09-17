@@ -23,6 +23,17 @@ for file in "${shell_files[@]}"; do
   bash -n "$file"
 done
 
+python3 - <<'PY'
+from pathlib import Path
+compile(Path("templates/rpi-kiosk-chromium-health.py").read_text(), "templates/rpi-kiosk-chromium-health.py", "exec")
+PY
+
+grep -Fq 'Storage=persistent' templates/journald/90-rpi-kiosk-persistent.conf
+grep -Fq 'SystemMaxUse=64M' templates/journald/90-rpi-kiosk-persistent.conf
+grep -Fq -- '--remote-debugging-address=127.0.0.1' templates/rpi-kiosk-browser
+grep -Fq 'force-restart' templates/rpi-kiosk-browser
+grep -Fq 'renderer_healthy' templates/rpi-kiosk-netwatch
+
 # shellcheck source=lib/core.sh
 source "$TEST_ROOT/lib/core.sh"
 # shellcheck source=modules/hardware.sh
@@ -160,16 +171,21 @@ INCOGNITO_MODE=n
 WAIT_FOR_NETWORK=n
 PING_HOST=127.0.0.1
 NETWORK_WAIT_SECONDS=2
+WORK_DEBUG_PORT=9222
+IDLE_DEBUG_PORT=9223
 CHROMIUM_BIN=$fake_chromium
 EOF
 
 bash "$TEST_ROOT/templates/rpi-kiosk-browser" work
 work_pid="$(<"$XDG_RUNTIME_DIR/rpi-kiosk/browser-work.pid")"
 kill -0 "$work_pid"
+tr '\0' ' ' <"/proc/$work_pid/cmdline" | grep -Fq -- '--remote-debugging-address=127.0.0.1'
+tr '\0' ' ' <"/proc/$work_pid/cmdline" | grep -Fq -- '--remote-debugging-port=9222'
 
 bash "$TEST_ROOT/templates/rpi-kiosk-browser" idle
 idle_pid="$(<"$XDG_RUNTIME_DIR/rpi-kiosk/browser-idle.pid")"
 kill -0 "$idle_pid"
+tr '\0' ' ' <"/proc/$idle_pid/cmdline" | grep -Fq -- '--remote-debugging-port=9223'
 if kill -0 "$work_pid" 2>/dev/null; then
   echo "HIBA: a work Chromium-folyamat nem állt le idle váltáskor." >&2
   exit 1
@@ -183,8 +199,20 @@ if kill -0 "$idle_pid" 2>/dev/null; then
   exit 1
 fi
 
-bash "$TEST_ROOT/templates/rpi-kiosk-browser" stop
+bash "$TEST_ROOT/templates/rpi-kiosk-browser" force-restart
+restarted_work_pid="$(<"$XDG_RUNTIME_DIR/rpi-kiosk/browser-work.pid")"
+kill -0 "$restarted_work_pid"
+if [[ "$restarted_work_pid" == "$second_work_pid" ]]; then
+  echo "HIBA: a force-restart nem indított új Chromium-folyamatot." >&2
+  exit 1
+fi
 if kill -0 "$second_work_pid" 2>/dev/null; then
+  echo "HIBA: a régi Chromium-folyamat force-restart után is fut." >&2
+  exit 1
+fi
+
+bash "$TEST_ROOT/templates/rpi-kiosk-browser" stop
+if kill -0 "$restarted_work_pid" 2>/dev/null; then
   echo "HIBA: a work Chromium-folyamat stop után is fut." >&2
   exit 1
 fi
