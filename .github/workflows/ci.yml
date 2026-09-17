@@ -7,11 +7,19 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: installer-validation-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check whitespace
+        run: git diff --check HEAD^ HEAD
 
       - name: Install ShellCheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck
@@ -24,6 +32,9 @@ jobs:
             templates/rpi-kiosk-netwatch \
             templates/cec/rpi-kiosk-cec \
             tests/test.sh
+
+      - name: Validate Python helper
+        run: python3 -m py_compile templates/rpi-kiosk-chromium-health.py
 
       - name: Run installer tests
         run: bash tests/test.sh
