@@ -2,6 +2,8 @@
 
 Gyorsan telepíthető és biztonságosan újrafuttatható kioszkrendszer Raspberry Pi 4 gépekhez.
 
+Ez a repository a kioszkrendszer **egyetlen aktívan karbantartott forrása**. A régi `MISIKEX/rpi-kiosk-idle-netwatch` repository csak kompatibilitási indító, és mindig ennek a projektnek az aktuális `main` ágát futtatja.
+
 ## Támogatott célrendszer
 
 - Raspberry Pi 4
@@ -36,9 +38,32 @@ A normál, aktív nézet a helyi kezelőpanel. A `swayidle` figyeli a felhaszná
 - egér- vagy billentyűaktivitáskor a kezelőpanel indul;
 - az alapértelmezett 20 másodperces inaktivitás után az inaktív KIOSK oldal indul;
 - az új nézet előbb megjelenik, és csak utána áll le a régi Chromium-folyamat;
-- a két nézet külön böngészőprofilt használ, így a kezelőpanel állapota nem keveredik az inaktív oldallal;
-- zárolás és PID-ellenőrzés akadályozza meg a párhuzamos vagy idegen Chromium-folyamatok leállítását.
+- a két nézet külön böngészőprofilt és külön localhost DevTools portot használ;
+- zárolás és PID-ellenőrzés akadályozza meg a párhuzamos vagy idegen Chromium-folyamatok leállítását;
 - a Raspberry Pi OS saját képernyőblankolása letiltásra kerül, hogy az inaktív KIOSK oldal folyamatosan látható maradjon.
+
+### KIOSK watchdog
+
+A watchdog nem csak azt ellenőrzi, hogy van-e internetkapcsolat. A Chromium renderer állapotát is tényleges JavaScript-végrehajtással ellenőrzi a kizárólag `127.0.0.1` címre kötött DevTools porton.
+
+Alapértelmezett működés:
+
+- internetellenőrzés 30 másodpercenként;
+- 20 perc folyamatos teljes internetkimaradás után rendszer-reboot;
+- 3 egymást követő renderer-hiba után Chromium `force-restart`;
+- 3 egymást követő sikertelen Chromium-helyreállítás után teljes rendszer-reboot;
+- az aktuális work/idle URL elérhetőségének figyelése;
+- ha egy korábban elérhetetlen kioszk URL visszatér, friss Chromium-helyreállítás történik.
+
+A watchdoghoz korlátozott persistent journal tartozik. Ez maximum 64 MB rendszerjournalt és legfeljebb 7 napnyi diagnosztikai előzményt tart meg, így reboot után is visszanézhető, mi történt közvetlenül a hiba előtt.
+
+### Plymouth splash
+
+Az egyedi splash **nem** a Raspberry Pi OS `pix` témájának csomag által kezelt képét írja felül. Saját témát használ:
+
+`/usr/share/plymouth/themes/rpi-kiosk/`
+
+Így egy későbbi `rpd-plym-splash` vagy `pix-plym-splash` csomagfrissítés nem tudja felülírni az Alu-Technika splash képet.
 
 ## Választható modulok
 
@@ -50,11 +75,12 @@ A normál, aktív nézet a helyi kezelőpanel. A `swayidle` figyeli a felhaszná
 - hálózatra várás
 - egérkurzor elrejtése
 - Alu-Technika háttérkép
-- Alu-Technika Plymouth splash
+- saját Alu-Technika Plymouth splash téma
 - 1080p kijelzőmód és forgatás
 - HDMI-hang
 - HDMI-CEC távirányító
-- internet-watchdog automatikus újraindítással
+- internet + Chromium renderer watchdog automatikus helyreállítással
+- korlátozott persistent systemd journal
 
 ## Tartósan telepített elemek
 
@@ -63,8 +89,11 @@ A TEMP könyvtár törlődik. Csak a működéshez szükséges, név szerint kez
 - `/etc/rpi-kiosk/` – kioszkbeállítások
 - `/var/lib/rpi-kiosk/` – minimális állapot és visszaállítási információ
 - `/usr/local/bin/rpi-kiosk-*` – futó segédprogramok
+- `/usr/local/libexec/rpi-kiosk-chromium-health` – Chromium renderer health-check
 - `/usr/local/share/rpi-kiosk/` – telepített grafikai elemek
+- `/usr/share/plymouth/themes/rpi-kiosk/` – saját Plymouth téma
 - `/etc/systemd/system/rpi-kiosk-*.service` – választható szolgáltatások
+- `/etc/systemd/journald.conf.d/90-rpi-kiosk-persistent.conf` – korlátozott persistent diagnosztikai journal
 - `~/.config/labwc/` – megjelölt, duplikációmentes labwc-blokkok
 - `~/.local/state/rpi-kiosk/chromium/` – elkülönített work/idle Chromium-profilok
 
@@ -76,6 +105,6 @@ Sikertelen telepítési lépésnél a hiba részletei a `~/rpi-kiosk-install-err
 bash tests/test.sh
 ```
 
-A teszt ellenőrzi a Bash-szintaxist, a kezelt blokkok ismételt frissítését, a bootparaméter-kezelő függvényeket és a hibakódok továbbadását.
+A teszt ellenőrzi a Bash-szintaxist, a Python health-check szintaxisát, a kezelt blokkok ismételt frissítését, a bootparaméter-kezelést, a work/idle Chromium-váltást, a külön localhost debug portokat és a `force-restart` működését. A GitHub Actions CI minden push után automatikusan futtatja a ShellChecket és a telepítőteszteket.
 
 Részletes felépítés: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
