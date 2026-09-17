@@ -21,8 +21,11 @@ source "$CONFIG_FILE"
   echo "Hibás IDLE_URL érték." >&2
   exit 2
 }
+WORK_DEBUG_PORT="${WORK_DEBUG_PORT:-9222}"
+IDLE_DEBUG_PORT="${IDLE_DEBUG_PORT:-9223}"
+[[ "$WORK_DEBUG_PORT" =~ ^[1-9][0-9]*$ ]] || { echo "Hibás WORK_DEBUG_PORT." >&2; exit 2; }
+[[ "$IDLE_DEBUG_PORT" =~ ^[1-9][0-9]*$ ]] || { echo "Hibás IDLE_DEBUG_PORT." >&2; exit 2; }
 
-readonly MODE="${1:-work}"
 readonly RUNTIME_BASE="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 readonly RUNTIME_DIR="$RUNTIME_BASE/rpi-kiosk"
 readonly STATE_FILE="$RUNTIME_DIR/browser-state"
@@ -39,6 +42,19 @@ flock -w "$((NETWORK_WAIT_SECONDS + 20))" 9 || {
   echo "A böngészőváltó zárolása időtúllépés miatt sikertelen." >&2
   exit 1
 }
+
+requested_mode="${1:-work}"
+force_restart="n"
+if [[ "$requested_mode" == "force-restart" ]]; then
+  force_restart="y"
+  requested_mode="work"
+  if [[ -r "$STATE_FILE" ]]; then
+    saved_state="$(<"$STATE_FILE")"
+    saved_mode="${saved_state%%:*}"
+    [[ "$saved_mode" == "work" || "$saved_mode" == "idle" ]] && requested_mode="$saved_mode"
+  fi
+fi
+readonly MODE="$requested_mode"
 
 case "$MODE" in
   work) target_url="$WORK_URL"; opposite_mode="idle" ;;
@@ -57,6 +73,13 @@ esac
 profile_dir() { printf '%s/%s\n' "$PROFILE_BASE" "$1"; }
 pid_file() { printf '%s/browser-%s.pid\n' "$RUNTIME_DIR" "$1"; }
 log_file() { printf '%s/chromium-%s.log\n' "$RUNTIME_DIR" "$1"; }
+debug_port() {
+  case "$1" in
+    work) printf '%s\n' "$WORK_DEBUG_PORT" ;;
+    idle) printf '%s\n' "$IDLE_DEBUG_PORT" ;;
+    *) return 1 ;;
+  esac
+}
 
 valid_managed_pid() {
   local mode="$1"
@@ -115,10 +138,11 @@ wait_for_network() {
 launch_browser() {
   local mode="$1"
   local url="$2"
-  local profile log pid_path browser_pid attempt
+  local profile log pid_path browser_pid attempt port
   profile="$(profile_dir "$mode")"
   log="$(log_file "$mode")"
   pid_path="$(pid_file "$mode")"
+  port="$(debug_port "$mode")"
 
   flags=(
     --kiosk
@@ -132,6 +156,9 @@ launch_browser() {
     --enable-features=UseOzonePlatform
     --ozone-platform=wayland
     --password-store=basic
+    --remote-debugging-address=127.0.0.1
+    "--remote-debugging-port=$port"
+    "--remote-allow-origins=*"
     "--user-data-dir=$profile"
   )
   [[ "$INCOGNITO_MODE" == "y" ]] && flags+=(--incognito)
@@ -162,7 +189,8 @@ if [[ "$MODE" == "stop" ]]; then
 fi
 
 expected_state="${MODE}:${CONFIG_HASH}"
-if [[ -r "$STATE_FILE" ]] &&
+if [[ "$force_restart" != "y" ]] &&
+  [[ -r "$STATE_FILE" ]] &&
   [[ "$(<"$STATE_FILE")" == "$expected_state" ]] &&
   current_pid "$MODE" >/dev/null; then
   exit 0
@@ -174,8 +202,8 @@ if current_pid "$MODE" >/dev/null; then
 fi
 launch_browser "$MODE" "$target_url"
 
-# Az új nézet előbb elindul, és csak utána áll le a régi. Ez megszünteti
-# a fekete villanást, miközben a kezelőpanel folyamatát valóban bezárja.
+# Normál work/idle váltásnál az új nézet előbb indul el. A két mód külön
+# localhost DevTools portot használ, ezért az átfedés nem okoz portütközést.
 sleep 0.8
 stop_browser "$opposite_mode"
 printf '%s\n' "$expected_state" >"$STATE_FILE"
