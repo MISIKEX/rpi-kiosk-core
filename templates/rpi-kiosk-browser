@@ -9,6 +9,12 @@ readonly CONFIG_FILE="${RPI_KIOSK_CONFIG_FILE:-/etc/rpi-kiosk/browser.env}"
 # shellcheck disable=SC1090
 source "$CONFIG_FILE"
 
+valid_tcp_port() {
+  local value="$1"
+  [[ "$value" =~ ^[1-9][0-9]*$ ]] || return 1
+  ((10#$value >= 1 && 10#$value <= 65535))
+}
+
 [[ "${NETWORK_WAIT_SECONDS:-}" =~ ^[1-9][0-9]*$ ]] || {
   echo "Hibás NETWORK_WAIT_SECONDS érték." >&2
   exit 2
@@ -21,10 +27,36 @@ source "$CONFIG_FILE"
   echo "Hibás IDLE_URL érték." >&2
   exit 2
 }
+for boolean_name in IDLE_ENABLED INCOGNITO_MODE WAIT_FOR_NETWORK; do
+  boolean_value="${!boolean_name:-}"
+  [[ "$boolean_value" == "y" || "$boolean_value" == "n" ]] || {
+    echo "Hibás $boolean_name érték; csak y vagy n engedélyezett." >&2
+    exit 2
+  }
+done
+[[ -n "${CHROMIUM_BIN:-}" ]] || {
+  echo "Hiányzó CHROMIUM_BIN érték." >&2
+  exit 2
+}
+if [[ "$WAIT_FOR_NETWORK" == "y" && -z "${PING_HOST:-}" ]]; then
+  echo "A WAIT_FOR_NETWORK=y beállításhoz PING_HOST szükséges." >&2
+  exit 2
+fi
+
 WORK_DEBUG_PORT="${WORK_DEBUG_PORT:-9222}"
 IDLE_DEBUG_PORT="${IDLE_DEBUG_PORT:-9223}"
-[[ "$WORK_DEBUG_PORT" =~ ^[1-9][0-9]*$ ]] || { echo "Hibás WORK_DEBUG_PORT." >&2; exit 2; }
-[[ "$IDLE_DEBUG_PORT" =~ ^[1-9][0-9]*$ ]] || { echo "Hibás IDLE_DEBUG_PORT." >&2; exit 2; }
+valid_tcp_port "$WORK_DEBUG_PORT" || {
+  echo "Hibás WORK_DEBUG_PORT; 1-65535 közötti TCP-port szükséges." >&2
+  exit 2
+}
+valid_tcp_port "$IDLE_DEBUG_PORT" || {
+  echo "Hibás IDLE_DEBUG_PORT; 1-65535 közötti TCP-port szükséges." >&2
+  exit 2
+}
+[[ "$WORK_DEBUG_PORT" != "$IDLE_DEBUG_PORT" ]] || {
+  echo "A WORK_DEBUG_PORT és IDLE_DEBUG_PORT nem lehet azonos." >&2
+  exit 2
+}
 
 readonly RUNTIME_BASE="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 readonly RUNTIME_DIR="$RUNTIME_BASE/rpi-kiosk"
