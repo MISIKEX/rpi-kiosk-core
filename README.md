@@ -54,6 +54,7 @@ Alapértelmezett működés:
 - 20 perc folyamatos teljes internetkimaradás után rendszer-reboot;
 - 3 egymást követő renderer-hiba után Chromium `force-restart`;
 - 3 egymást követő sikertelen Chromium-helyreállítás után teljes rendszer-reboot;
+- a systemd hardveres reboot-watchdog 30 másodperc után reseteli a Pi-t, ha a szabályos reboot a végső leállítási fázisban beragad;
 - az aktuális work/idle URL elérhetőségének figyelése;
 - ha egy korábban elérhetetlen kioszk URL visszatér, friss Chromium-helyreállítás történik.
 
@@ -96,6 +97,7 @@ A TEMP könyvtár törlődik. Csak a működéshez szükséges, név szerint kez
 - `/usr/share/plymouth/themes/rpi-kiosk/` – saját Plymouth téma
 - `/etc/systemd/system/rpi-kiosk-*.service` – választható szolgáltatások
 - `/etc/systemd/journald.conf.d/90-rpi-kiosk-persistent.conf` – korlátozott persistent diagnosztikai journal
+- `/etc/systemd/system.conf.d/90-rpi-kiosk-watchdog.conf` – 1 perces runtime watchdog és 30 másodperces reboot-fallback
 - `~/.config/labwc/` – megjelölt, duplikációmentes labwc-blokkok
 - `~/.local/state/rpi-kiosk/chromium/` – elkülönített work/idle Chromium-profilok
 
