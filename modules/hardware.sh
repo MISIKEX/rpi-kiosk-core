@@ -51,6 +51,18 @@ cmdline_without_key() {
   printf '%s\n' "$output"
 }
 
+cmdline_without_prefix() {
+  local line="$1"
+  local prefix="$2"
+  local token output=""
+  # shellcheck disable=SC2086
+  for token in $line; do
+    [[ "$token" == "$prefix"* ]] && continue
+    output+="${output:+ }$token"
+  done
+  printf '%s\n' "$output"
+}
+
 cmdline_append_token() {
   local line="$1"
   local token="$2"
@@ -90,6 +102,10 @@ apply_cmdline_settings() {
       line="$(cmdline_append_token "$line" "console=tty1")"
     fi
   fi
+
+  # A Raspberry Pi Imager első indítási NoCloud datasource-paramétere a
+  # telepítés után már nem része a kioszk futásának; csak ezt a célzott mintát töröljük.
+  line="$(cmdline_without_prefix "$line" "ds=nocloud;i=rpi-imager-")"
 
   [[ -n "$old_video" ]] && line="$(cmdline_without_exact_token "$line" "$old_video")"
   [[ "$old_quiet" == "y" ]] && line="$(cmdline_without_exact_token "$line" quiet)"
