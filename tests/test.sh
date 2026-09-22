@@ -177,6 +177,13 @@ assert_equals \
   "$legacy_console_line" \
   "régi tty3 konzol migrációja"
 
+imager_line="root=/dev/mmcblk0p2 quiet ds=nocloud;i=rpi-imager-123456 console=tty1"
+imager_line="$(cmdline_without_prefix "$imager_line" "ds=nocloud;i=rpi-imager-")"
+assert_equals \
+  "root=/dev/mmcblk0p2 quiet console=tty1" \
+  "$imager_line" \
+  "Raspberry Pi Imager NoCloud bootmaradvány eltávolítása"
+
 # A Chromium-vezérlő integrációs tesztje egy izolált, alvó próbafolyamattal.
 fake_chromium="$RUN_TMP/fake-chromium"
 cat >"$fake_chromium" <<'EOF'
