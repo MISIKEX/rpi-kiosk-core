@@ -39,6 +39,9 @@ grep -Fq -- '--remote-debugging-address=127.0.0.1' templates/rpi-kiosk-browser
 grep -Fq 'force-restart' templates/rpi-kiosk-browser
 grep -Fq 'renderer_healthy' templates/rpi-kiosk-netwatch
 grep -Fq 'Restart=on-failure' templates/systemd/rpi-kiosk-netwatch.service
+grep -Fq 'RuntimeWatchdogSec=1m' templates/systemd/90-rpi-kiosk-watchdog.conf
+grep -Fq 'RebootWatchdogSec=30s' templates/systemd/90-rpi-kiosk-watchdog.conf
+grep -Fq '90-rpi-kiosk-watchdog.conf' modules/hardware.sh
 grep -Fq 'https://github.com/MISIKEX/rpi-kiosk-core.git' README.md
 grep -Fq 'https://github.com/MISIKEX/rpi-kiosk-core.git' kiosk-telepites.md
 
