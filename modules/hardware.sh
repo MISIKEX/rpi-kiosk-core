@@ -223,8 +223,17 @@ apply_cec() {
   fi
 }
 
+apply_reboot_watchdog() {
+  install_root_file \
+    "$SCRIPT_DIR/templates/systemd/90-rpi-kiosk-watchdog.conf" \
+    "/etc/systemd/system.conf.d/90-rpi-kiosk-watchdog.conf" \
+    0644
+  success "Hardveres reboot-watchdog konfigurálva: beragadt reboot esetén 30 mp után hardveres reset."
+}
+
 apply_hardware_module() {
   section "Kijelző, hang és HDMI-CEC"
+  apply_reboot_watchdog
   apply_boot_config
   apply_cmdline_settings
   apply_cec
