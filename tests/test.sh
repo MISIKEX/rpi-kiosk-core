@@ -102,9 +102,9 @@ assert_count() {
   assert_equals "$expected" "$actual" "$pattern előfordulása"
 }
 
-validate_http_url "http://192.168.1.40:18006"
+validate_http_url "http://192.168.1.20:18006"
 validate_http_url "https://kiosk.example.local/path?a=1"
-assert_equals "192.168.1.40" "$(url_host "http://192.168.1.40:18006/app")" "URL host kinyerése"
+assert_equals "192.168.1.20" "$(url_host "http://192.168.1.20:18006/app")" "URL host kinyerése"
 if validate_http_url "javascript:alert(1)"; then
   echo "HIBA: veszélyes URL átment a validáción." >&2
   exit 1
