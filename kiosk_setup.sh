@@ -38,7 +38,7 @@ collect_configuration() {
       warn "A kioszk-autostart Chromiumot igényel; a Chromium telepítése automatikusan bekapcsolva."
       ENABLE_CHROMIUM="y"
     fi
-    WORK_URL="$(ask_value "Kezelőpanel URL" "http://192.168.1.40:18006")"
+    WORK_URL="$(ask_value "Kezelőpanel URL" "http://192.168.1.20:18006")"
     validate_http_url "$WORK_URL" || die "Érvénytelen kezelőpanel URL: $WORK_URL"
 
     ENABLE_INCOGNITO="$(ask_yes_no "Induljon a Chromium inkognitó módban?" "n")"
